@@ -1,5 +1,11 @@
 {
   "name": "earth-postcards",
+  "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node server/index.mjs",
+    "start": "node server/index.mjs"
+  }
 }
