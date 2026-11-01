@@ -18,6 +18,8 @@ try {
   }
 } catch {}
 
+const imageModel = process.env.IMAGE_MODEL || "gpt-image-2.5-flare";
+
 function sendJson(response, status, value) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(value));
@@ -43,6 +45,26 @@ async function readJson(request, maximum = 8 * 1024 * 1024) {
   }
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
   catch { throw Object.assign(new Error("Request must contain valid JSON."), { status: 400 }); }
+}
+
+function responseText(data) {
+  return data.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text?.trim() || "";
+}
+
+function parseJsonText(value) {
+  const cleaned = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  return JSON.parse(cleaned);
+}
+
+function validCoordinates(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 85 && Math.abs(lng) <= 180;
+}
+
+function rollRarity() {
+  const roll = Math.random();
+  if (roll < 0.15) return "legendary";
+  if (roll < 0.50) return "rare";
+  return "common";
 }
 
 async function searchPlaces(request, response, url) {
@@ -97,16 +119,23 @@ async function createPostcard(request, response) {
     return sendJson(response, 400, { error: "A satellite image is required." });
   }
   if (!process.env.OPENAI_API_KEY) return sendJson(response, 503, { error: "Add OPENAI_API_KEY to .env to make your postcard." });
-  const validStyles = ["Vintage travel poster", "Risograph print", "Mid-century modern", "Watercolour atlas"];
+  const stylePrompts = {
+    "Travel poster": "bold vintage travel-poster shapes, limited sun-faded screen-print palette, elegant condensed visual rhythm",
+    "Watercolour": "transparent watercolour washes, hand-painted pigment edges, paper grain and soft atmospheric colour",
+    "Blueprint": "precise cyanotype blueprint lines, navy field, measured contour accents and technical drafting texture",
+    "Mission patch": "embroidered mission-patch illustration, layered fabric shapes, stitched edge texture and a confident expedition palette",
+    "Woodblock print": "carved woodblock print marks, expressive ink grain, registration texture and a restrained earthy palette",
+  };
+  const validStyles = Object.keys(stylePrompts);
   const selectedStyle = validStyles.includes(style) ? style : validStyles[0];
   const placeName = String(place || "Earth").slice(0, 120).replace(/[\n"\\]/g, " ");
   const imageBytes = Buffer.from(image.split(",")[1], "base64");
   const form = new FormData();
-  form.append("model", "gpt-image-2.5-sunburst");
-  form.append("prompt", `Restyle this real satellite image of ${placeName} as a beautiful ${selectedStyle}. Preserve recognizable geography, coastline, rivers and urban shape from the source. Use confident shapes, a warm limited palette and refined print texture. Add a clean cream caption panel at the bottom with the exact place name “${placeName}” and no other text. Portrait travel-poster composition. Do not invent landmarks or alter the geographic layout.`);
-  form.append("size", "1024x1536"); form.append("quality", "medium"); form.append("output_format", "png");
+  form.append("model", imageModel);
+  form.append("prompt", `Restyle this real satellite image of ${placeName} as ${selectedStyle}: ${stylePrompts[selectedStyle]}. Preserve the exact geographic layout, coastline, rivers, roads, urban shape and orientation so a before/after slider lines up. Create full-bleed landscape artwork with no text, labels, borders, frames, margins or caption panel. Do not invent landmarks or alter the geographic layout.`);
+  form.append("size", "1536x1024"); form.append("quality", "medium"); form.append("output_format", "png");
   form.append("image[]", new Blob([imageBytes], { type: "image/jpeg" }), "earth-view.jpg");
-  const captionPrompt = `Write one poetic, friendly postcard caption for a travel-lover about ${placeName}. One sentence, 12 words maximum. Do not claim a landmark or fact unless certain. Coordinates: ${String(coordinates || "").slice(0, 40)}. Return only the caption.`;
+  const captionPrompt = `Write postcard copy for ${placeName}. Return only valid JSON with exactly these keys: caption and note. caption is one poetic, friendly sentence with at most 12 words. note is exactly two warm sentences for the back of a postcard, signed by nobody. Do not claim a landmark or fact unless certain. Coordinates: ${String(coordinates || "").slice(0, 40)}.`;
   try {
     const headers = { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` };
     const [imageResponse, captionResponse] = await Promise.all([
@@ -116,12 +145,37 @@ async function createPostcard(request, response) {
     const [imageData, captionData] = await Promise.all([imageResponse.json(), captionResponse.json()]);
     if (!imageResponse.ok) throw new Error(imageData.error?.message || `Image edit returned ${imageResponse.status}`);
     if (!captionResponse.ok) throw new Error(captionData.error?.message || `Caption request returned ${captionResponse.status}`);
-    const caption = captionData.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text?.trim();
-    if (!imageData.data?.[0]?.b64_json || !caption) throw new Error("The generation response was incomplete.");
-    sendJson(response, 200, { image: imageData.data[0].b64_json, caption: caption.replace(/^['"“”]|['"“”]$/g, "") });
+    const captionPayload = parseJsonText(responseText(captionData));
+    const caption = typeof captionPayload.caption === "string" ? captionPayload.caption.trim() : "";
+    const note = typeof captionPayload.note === "string" ? captionPayload.note.trim() : "";
+    if (!imageData.data?.[0]?.b64_json || !caption || !note || caption.split(/\s+/).length > 12) throw new Error("The generation response was incomplete.");
+    sendJson(response, 200, { image: imageData.data[0].b64_json, caption: caption.replace(/^['"“”]|['"“”]$/g, ""), note, rarity: rollRarity(), imageModel });
   } catch (error) {
     console.error("Postcard generation failed:", error.message);
     sendJson(response, 502, { error: "The postcard could not be generated. Check your API billing and image-model access, then try again." });
+  }
+}
+
+async function findPlace(request, response) {
+  const body = await readJson(request, 32 * 1024);
+  const text = typeof body.text === "string" ? body.text.trim().slice(0, 240) : "";
+  if (text.length < 3) return sendJson(response, 400, { error: "Describe a place in at least three characters." });
+  if (!process.env.OPENAI_API_KEY) return sendJson(response, 503, { error: "Add OPENAI_API_KEY to .env to find a place." });
+  const headers = { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" };
+  const tool = { type: "function", name: "fly_to", description: "Choose one real Earth place matching the user's description and return its coordinates.", parameters: { type: "object", additionalProperties: false, properties: { name: { type: "string", description: "A concise real place name." }, lat: { type: "number", description: "Latitude in decimal degrees." }, lng: { type: "number", description: "Longitude in decimal degrees." }, reason: { type: "string", description: "One short reason this place matches." } }, required: ["name", "lat", "lng", "reason"] } };
+  try {
+    const result = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers, body: JSON.stringify({ model: "gpt-6-luna", instructions: "Use the fly_to function exactly once. Pick a real, recognizable place on Earth that best matches the description. Never invent coordinates.", input: text, tools: [tool], tool_choice: { type: "function", name: "fly_to" } }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error?.message || `Where request returned ${result.status}`);
+    const call = data.output?.find((item) => item.type === "function_call" && item.name === "fly_to");
+    if (!call) throw new Error("The where response did not choose a place.");
+    const place = JSON.parse(call.arguments || "{}");
+    const lat = Number(place.lat); const lng = Number(place.lng);
+    if (typeof place.name !== "string" || !place.name.trim() || !validCoordinates(lat, lng) || typeof place.reason !== "string" || !place.reason.trim()) throw new Error("The chosen place was invalid.");
+    sendJson(response, 200, { name: place.name.trim().slice(0, 120), lat, lng, reason: place.reason.trim().slice(0, 240) });
+  } catch (error) {
+    console.error("Where lookup failed:", error.message);
+    sendJson(response, 502, { error: "I could not find a reliable place for that description. Try another one." });
   }
 }
 
@@ -145,6 +199,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/search") return await searchPlaces(request, response, url);
     if (request.method === "GET" && url.pathname === "/api/satellite") return await satelliteImage(response, url);
     if (request.method === "POST" && url.pathname === "/api/postcard") return await createPostcard(request, response);
+    if (request.method === "POST" && url.pathname === "/api/where") return await findPlace(request, response);
     if (request.method === "GET") return serveStatic(response, url.pathname);
     response.writeHead(405, { Allow: "GET, POST" }); response.end("Method not allowed");
   } catch (error) {
