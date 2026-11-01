@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f3f0e7" />
+    <meta name="description" content="Turn a real view of Earth into a postcard from somewhere you love." />
+    <title>Earth Postcards — a view from everywhere</title>
+    <link rel="preconnect" href="https://gibs.earthdata.nasa.gov" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar"><a class="wordmark" href="#top"><span class="mark">✳</span> EARTH POSTCARDS</a><span class="top-note">A little love letter to somewhere.</span><a class="about-link" href="https://www.earthdata.nasa.gov/data/tools/worldview/gibs" target="_blank" rel="noreferrer">Imagery by NASA ↗</a></header>
+      <section class="hero" id="top"><div class="eyebrow">✦ &nbsp; YOUR VIEW OF THE WORLD, REIMAGINED</div><h1>Send a postcard<br /><em>from anywhere.</em></h1><p class="intro">Pick a place you love. We’ll find a real satellite view and turn it into a keepsake from orbit.</p></section>
+      <section class="workspace">
+        <div class="controls">
+          <div class="step"><span class="step-num">01</span><div><h2>Choose a place</h2><p>Anywhere on Earth is a good start.</p></div></div>
+          <form class="search-form" id="search-form"><label for="place">PLACE NAME</label><div class="search-row"><input id="place" name="place" placeholder="Try Kyoto, Japan" autocomplete="off" /><button id="search-button" type="submit" aria-label="Search place">↗</button></div></form>
+          <div class="samples"><button data-place="London">London</button><button data-place="Iceland">Iceland</button><button data-place="Grand Canyon">Grand Canyon</button></div>
+          <div id="search-results" class="results" role="listbox" aria-label="Place results" hidden></div>
+          <div id="inline-status" class="inline-status" hidden></div>
+          <div id="selected-place" class="selected-place" hidden><span class="check">✓</span><div><strong id="selected-name"></strong><small id="selected-meta"></small></div></div>
+          <div class="step second-step"><span class="step-num">02</span><div><h2>Set the mood</h2><p>Choose the style of your postcard.</p></div></div>
+          <div class="style-list" id="style-list">
+            <button class="style-option active" data-style="Vintage travel poster"><span class="style-swatch swatch-0"></span>Vintage travel poster<span class="radio">●</span></button>
+            <button class="style-option" data-style="Risograph print"><span class="style-swatch swatch-1"></span>Risograph print<span class="radio">○</span></button>
+            <button class="style-option" data-style="Mid-century modern"><span class="style-swatch swatch-2"></span>Mid-century modern<span class="radio">○</span></button>
+            <button class="style-option" data-style="Watercolour atlas"><span class="style-swatch swatch-3"></span>Watercolour atlas<span class="radio">○</span></button>
+          </div>
+          <button class="create-button" id="create-button" disabled>Make my postcard <span>↗</span></button>
+          <p class="privacy-note">Your place search is sent to OpenStreetMap. Your image is sent to OpenAI for editing.</p>
+        </div>
+        <div class="preview-column">
+          <div class="preview-head"><div><span class="preview-label">YOUR POSTCARD</span><span id="preview-title" class="preview-title">Ready when you are</span></div><span id="preview-counter" class="preview-counter">✳</span></div>
+          <div id="postcard-frame" class="postcard-frame"><div id="empty-preview" class="empty-preview"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="earth">◉</div><span class="empty-star star-one">✳</span><span class="empty-star star-two">✦</span><p>Your next favourite place<br />is out there.</p><small>SEARCH ANYWHERE TO GET STARTED</small></div></div>
+          <div id="error-message" class="error-message" role="alert" hidden></div>
+          <div id="preview-foot" class="preview-foot"><span>Made with a little help from orbit.</span><span>✳ &nbsp; KEEP EXPLORING</span></div>
+          <div id="result-actions" class="result-actions" hidden><div id="source-note" class="source-note"></div><button class="download-button" id="download-button">Download postcard <span>↓</span></button></div>
+        </div>
+      </section>
+      <footer class="footer"><div>© EARTH POSTCARDS <span>·</span> MADE FOR THE CURIOUS</div><div><a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noreferrer">NASA GIBS imagery</a><span>·</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap data</a></div></footer>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
