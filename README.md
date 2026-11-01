@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:8787>. A small Node.js server serves the static web app and handles the API routes using built-in Node features. The OpenAI key is read only by the server and never sent to the browser. To produce a postcard, select a place, wait for the satellite preview, choose a style, then click **Make my postcard**. Download the finished PNG from the preview. Restart `npm run dev` after changing `.env` so the server loads the key.
+Open <http://localhost:8787>. A small Node.js server serves the static web app and handles the API routes using built-in Node features. The OpenAI key is read only by the server and never sent to the browser. To produce a postcard, select a place, wait for the satellite preview, choose a style, then click **Capture**. Download the finished PNG from the revealed card. Restart `npm run dev` after changing `.env` so the server loads the key.
 
 ## What it uses
 
@@ -27,7 +27,7 @@ Open <http://localhost:8787>. A small Node.js server serves the static web app a
 - NASA GIBS imagery: “We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).” Source: [GIBS API documentation](https://nasa-gibs.github.io/gibs-api-docs/).
 - Place names/geocoding: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), data available under the [Open Database License](https://opendatacommons.org/licenses/odbl/). Public Nominatim [usage policy](https://operations.osmfoundation.org/policies/nominatim/).
 - Image API: [OpenAI Image generation and editing documentation](https://developers.openai.com/api/docs/guides/image-generation). GPT Image edits are generated outputs and can change details; check the result before sharing as a factual map.
-- Typography: DM Sans, DM Mono, and Playfair Display are loaded from [Google Fonts](https://fonts.google.com/); Google Fonts states its font collection uses open-source licenses. The page has local system-font fallbacks.
+- Typography: Unbounded, Sora, and Caveat are loaded from [Google Fonts](https://fonts.google.com/); Google Fonts states its font collection uses open-source licenses. The page has local system-font fallbacks.
 - App code: created for the DevDay Exchange Community Hackathon with Codex. No third-party UI template or stock imagery is included.
 - Hackathon: [DevDay Exchange London community hackathon](https://luma.com/dde-ldn-hack). Codex workflow references: [Codex docs](https://developers.openai.com/codex), [quickstart](https://developers.openai.com/codex/quickstart), and [Cookbook example](https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex).
 
