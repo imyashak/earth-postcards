@@ -19,7 +19,8 @@ Open <http://localhost:8787>. A small Node.js server serves the static web app a
 - Vanilla browser JavaScript and a built-in Node HTTP server; no build step or npm dependencies.
 - NASA Global Imagery Browse Services (GIBS) WMS `Landsat_WELD_CorrectedReflectance_TrueColor_Global_Annual` for a clear annual Landsat composite. The latest global annual image exposed by the catalog is the 2000 composite. The public service requires no API key; NASA asks clients to acknowledge its imagery. The app labels the image as a historical 2000 composite. It is not a current image or street-level basemap; some ocean and polar locations may have little or no land imagery.
 - OpenStreetMap Nominatim for on-demand place lookup. Searches are explicit (no autocomplete), cached in memory, and spaced by at least one second. This public community service has limited capacity; follow its current usage policy and replace it with another provider if the app grows.
-- OpenAI Image API [`POST /v1/images/edits`](https://developers.openai.com/api/reference/resources/images/methods/edit), model [`gpt-image-2.5-sunburst`](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst), to restyle the fetched satellite image, plus Responses API `gpt-6-luna` for a short caption.
+- OpenAI Image API [`POST /v1/images/edits`](https://developers.openai.com/api/reference/resources/images/methods/edit), with `IMAGE_MODEL` defaulting to [`gpt-image-2.5-flare`](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare) for a fast live demo. Set `IMAGE_MODEL=gpt-image-2.5-sunburst` for the higher-quality edit option. Outputs are 1536×1024 landscape artwork with no labels or border so the client can align a before/after slider. The Responses API `gpt-6-luna` returns JSON postcard copy and powers the descriptive `/api/where` function call.
+- Five server-validated style prompts are available: Travel poster, Watercolour, Blueprint, Mission patch, and Woodblock print. A server-side rarity roll assigns common (50%), rare (35%), or legendary (15%).
 
 ## Credits and attribution
 
@@ -32,11 +33,11 @@ Open <http://localhost:8787>. A small Node.js server serves the static web app a
 
 ## Submission demo (target: 60–75 seconds)
 
-1. (0–8s) “Earth Postcards turns places you love into tiny keepsakes from orbit.” Show the empty canvas.
+1. (0–8s) “Earth Postcards turns places you love into tiny keepsakes from orbit.” Show the globe and destination panel.
 2. (8–20s) Search for a recognizable place and select a result. Show the NASA Landsat image and its clearly labeled 2000 composite date.
 3. (20–28s) Pick a style and start generation. Keep the progress state visible briefly.
 4. (28–47s) Reveal the finished poster and read the caption. Show the download action and, if practical, the saved postcard.
-5. (47–60s) Briefly show the server route using `gpt-image-2.5-sunburst`, the live product journey, and README setup. Mention that Codex helped verify the current model/endpoint docs, design the smallest complete flow, and implement the key-safe API boundary.
+5. (47–60s) Briefly show the server route using the configured `IMAGE_MODEL`, the live product journey, and README setup. Mention that Codex helped verify the current model/endpoint docs, design the smallest complete flow, and implement the key-safe API boundary.
 
 Keep API keys, `.env`, personal data, and private dashboard/browser tabs out of the recording. Record the actual working app once a key is configured; do not use a mock generation in the submitted demo.
 
@@ -45,4 +46,5 @@ Keep API keys, `.env`, personal data, and private dashboard/browser tabs out of 
 - Public demo traffic is not appropriate for the shared Nominatim service without additional controls/provider approval. The app is designed for a small, user-triggered hackathon demo.
 - NASA Landsat WELD is a historical 2000 annual composite, not a recent observation. Coverage is land-focused and may be sparse over oceans and polar areas.
 - Image generation needs an OpenAI API key, billing, and possibly organization verification. The app reports generation failures in the UI.
-- There is no account system or persistent image storage. Download the PNG to keep it.
+- Saved postcards are stored only in the browser's localStorage; download the PNG to keep it elsewhere.
+- Switch between **My postcards** and **DevDay tour** below the header. Tour mode plots the 11 dated Exchange/community stops, dims past events, highlights today's stop as “YOU ARE HERE”, draws the Exchange route, and links each stop to its official event page. Capturing a tour stop records its stamp in the 11-dot local tour tracker.
