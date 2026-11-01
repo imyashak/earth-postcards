@@ -1,134 +1,33 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { query: "", results: [], place: null, style: "Vintage travel poster", source: "", date: "", result: null, busy: "" };
+const state = { place: null, source: "", style: "Travel poster", result: null, busy: false, pins: [], flipped: false };
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (reducedMotion) document.documentElement.classList.add("reduced-motion");
+const textureBase = "https://cdn.jsdelivr.net/npm/three-globe@2.45.5/example/img/";
+const globe = Globe()($("#globe")).globeImageUrl(`${textureBase}earth-night.jpg`).bumpImageUrl(`${textureBase}earth-topology.png`).backgroundColor("rgba(0,0,0,0)").atmosphereColor("#7C9BFF").atmosphereAltitude(.18).showGraticules(false).htmlElementsData([]).htmlLat("lat").htmlLng("lng").htmlElement((pin) => { const el = document.createElement("div"); el.className = `globe-pin ${pin.rarity || "common"}`; const image = document.createElement("img"); image.src = pin.image; image.alt = `Saved postcard from ${pin.name}`; const label = document.createElement("span"); label.textContent = pin.name; el.append(image, label); return el; }).arcsData([]).arcStartLat("startLat").arcStartLng("startLng").arcEndLat("endLat").arcEndLng("endLng").arcColor(() => "#F3D98E").arcDashLength(.35).arcDashGap(1.8).arcDashAnimateTime(reducedMotion ? 0 : 4200).arcStroke(.45).ringsData([]).ringLat("lat").ringLng("lng").ringColor(() => "#F3D98E").ringMaxRadius(5).ringPropagationSpeed(1.8).ringRepeatPeriod(reducedMotion ? 0 : 1400);
+globe.controls().autoRotate = !reducedMotion; globe.controls().autoRotateSpeed = .22; globe.controls().enableDamping = true; globe.pointOfView({ lat: 18, lng: 12, altitude: 2.3 }, 0);
 
-const searchForm = $("#search-form");
-const searchInput = $("#place");
-const resultsBox = $("#search-results");
-const inlineStatus = $("#inline-status");
-const selectedPlace = $("#selected-place");
-const frame = $("#postcard-frame");
-const createButton = $("#create-button");
-const errorBox = $("#error-message");
+const searchForm = $("#search-form"); const searchInput = $("#place"); const resultsBox = $("#search-results"); const inlineStatus = $("#inline-status"); const createButton = $("#create-button"); const captureButton = $("#capture-button"); const errorBox = $("#error-message"); const detailPanel = $("#detail-panel"); const rarityOrder = { legendary: 0, rare: 1, common: 2 }; const reward = { common: 20, rare: 60, legendary: 180 };
+const samplePrompts = ["somewhere with turquoise water", "a red desert at sunrise", "the edge of a rainforest", "a city beside a bright river"];
+function setError(message = "") { errorBox.textContent = message; errorBox.hidden = !message; }
+function setBusy(value, message = "") { state.busy = Boolean(value); createButton.disabled = !state.source || state.busy; captureButton.disabled = !state.source || state.busy; inlineStatus.textContent = message; inlineStatus.hidden = !message; }
+function nameOf(place) { return String(place.display_name || place.name || "Earth").split(",").slice(0, 2).join(","); }
+function localTime(lng) { const offset = Math.max(-12, Math.min(14, Math.round(Number(lng) / 15))); const sign = offset >= 0 ? "+" : "−"; return `UTC${sign}${Math.abs(offset)} · ${new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(new Date(Date.now() + offset * 3600000))}`; }
+function flyTo(place) { globe.controls().autoRotate = false; globe.ringsData([{ lat: Number(place.lat), lng: Number(place.lng) }]); globe.pointOfView({ lat: Number(place.lat), lng: Number(place.lng), altitude: 1.65 }, reducedMotion ? 0 : 1400); }
+function openDetail(place, reason = "Real place selected") { state.place = { ...place, lat: Number(place.lat), lng: Number(place.lng ?? place.lon), display_name: place.display_name || place.name }; state.result = null; state.flipped = false; detailPanel.hidden = false; $("#place-view").hidden = false; $("#card-view").hidden = true; $("#capture-progress").hidden = true; $("#detail-place").textContent = nameOf(state.place).toUpperCase(); $("#detail-meta").textContent = `${state.place.lat.toFixed(3)}° / ${state.place.lng.toFixed(3)}° · ${localTime(state.place.lng)} · ${reason}`; flyTo(state.place); loadSatellite(state.place); }
+async function loadSatellite(place) { setBusy(true, "Pulling the Earth view…"); setError(""); try { const response = await fetch(`/api/satellite?lat=${encodeURIComponent(place.lat)}&lon=${encodeURIComponent(place.lng)}&v=landsat-2000`); const data = response.ok ? await response.blob() : await response.json(); if (!response.ok) throw new Error(data.error || "Imagery unavailable."); state.source = URL.createObjectURL(data); $("#orbit-preview").src = state.source; captureButton.disabled = false; } catch (error) { state.source = ""; setError(error.message); } finally { setBusy(false); } }
+async function searchPlaces(term) { setBusy(true, "Searching the map…"); setError(""); try { const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Search failed."); if (!data.length) throw new Error("No place found. Try a city, region or landmark."); if (data.length === 1) return openDetail(data[0], "OpenStreetMap place search"); resultsBox.replaceChildren(); data.forEach((place) => { const button = document.createElement("button"); button.type = "button"; button.textContent = place.display_name; button.addEventListener("click", () => openDetail(place, "OpenStreetMap place search")); resultsBox.append(button); }); resultsBox.hidden = false; } catch (error) { setError(error.message); } finally { setBusy(false); } }
+async function findByDescription(text) { setBusy(true, "Finding a real place…"); setError(""); try { const response = await fetch("/api/where", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not find that place."); openDetail({ name: data.name, display_name: data.name, lat: data.lat, lng: data.lng }, data.reason); } catch (error) { setError(error.message); } finally { setBusy(false); } }
+function goSomewhere() { const text = searchInput.value.trim(); if (text.length < 3) return setError("Describe a place or type a name first."); return /somewhere|with |near |beside |edge of|at sunrise|bright |turquoise|red desert|rainforest/i.test(text) ? findByDescription(text) : searchPlaces(text); }
 
-function setError(message = "") {
-  errorBox.textContent = message;
-  errorBox.hidden = !message;
+function progressStep(name, active) { const step = document.querySelector(`[data-step="${name}"]`); step.classList.toggle("active", active); step.querySelector("b").textContent = active ? "●" : "○"; }
+async function capture() { if (!state.source || !state.place || state.busy) return; state.busy = true; $("#place-view").hidden = true; $("#card-view").hidden = true; $("#capture-progress").hidden = false; ["capture", "paint", "write"].forEach((step) => progressStep(step, false)); progressStep("capture", true); setError(""); try { const blob = await (await fetch(state.source)).blob(); const image = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); }); progressStep("paint", true); const response = await fetch("/api/postcard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, place: nameOf(state.place), style: state.style, coordinates: `${state.place.lat.toFixed(3)}, ${state.place.lng.toFixed(3)}` }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Generation failed."); progressStep("write", true); state.result = { ...data, src: `data:image/png;base64,${data.image}`, original: state.source, name: nameOf(state.place), lat: state.place.lat, lng: state.place.lng }; await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 0 : 450)); showResult(); } catch (error) { $("#place-view").hidden = false; $("#capture-progress").hidden = true; setError(error.message); } finally { state.busy = false; }
 }
+function showResult() { $("#capture-progress").hidden = true; $("#card-view").hidden = false; $("#tilt-card").className = `tilt-card ${state.result.rarity}`; $("#rarity-line").textContent = `${"★".repeat(state.result.rarity === "legendary" ? 5 : state.result.rarity === "rare" ? 3 : 1)} ${state.result.rarity[0].toUpperCase()}${state.result.rarity.slice(1)}`; $("#compare-original").src = state.result.original; $("#compare-edited").src = state.result.src; $("#result-caption").textContent = `“${state.result.caption}”`; $("#result-note").textContent = state.result.note; $("#postmark").textContent = `${state.result.lat.toFixed(3)}° / ${state.result.lng.toFixed(3)}°\n${new Date().toISOString().slice(0, 10)}`; $("#xp-reward").textContent = `+${reward[state.result.rarity]} XP · level progress`; updateCompare(); savePostcard(); requestAnimationFrame(() => $("#tilt-card").classList.add("revealed")); }
+function updateCompare() { $("#compare-edited").style.clipPath = `inset(0 0 0 ${100 - Number($("#compare-range").value)}%)`; }
+function readSaved() { try { return JSON.parse(localStorage.getItem("earth-postcards") || "[]"); } catch { return []; } }
+function savePostcard() { if (!state.result) return; const saved = readSaved().filter((item) => !(item.name === state.result.name && item.lat === state.result.lat)); saved.push({ name: state.result.name, lat: state.result.lat, lng: state.result.lng, image: state.result.src, rarity: state.result.rarity, caption: state.result.caption }); localStorage.setItem("earth-postcards", JSON.stringify(saved)); renderCollection(); }
+function renderCollection() { state.pins = readSaved().sort((a, b) => rarityOrder[a.rarity] - rarityOrder[b.rarity]); globe.htmlElementsData(state.pins); globe.arcsData(state.pins.slice(1).map((pin, index) => ({ startLat: state.pins[index].lat, startLng: state.pins[index].lng, endLat: pin.lat, endLng: pin.lng }))); $("#place-count").textContent = `${state.pins.length} ${state.pins.length === 1 ? "place" : "places"}`; $("#collection-title").textContent = state.pins.length ? `${state.pins.length} place${state.pins.length === 1 ? "" : "s"} in orbit.` : "Your places will orbit here."; const totalXp = state.pins.reduce((total, pin) => total + (reward[pin.rarity] || 20), 0); $("#level-fill").style.width = `${Math.min(100, 12 + totalXp / 4)}%`; }
+function downloadPostcard() { if (!state.result) return; const image = new Image(); image.onload = () => { const canvas = document.createElement("canvas"); canvas.width = 1536; canvas.height = 1120; const ctx = canvas.getContext("2d"); ctx.drawImage(image, 0, 0, 1536, 1024); ctx.fillStyle = "#0c0e26"; ctx.fillRect(0, 1024, 1536, 96); ctx.fillStyle = "#F3D98E"; ctx.font = "26px Sora"; ctx.fillText(state.result.caption, 42, 1062); const link = document.createElement("a"); link.download = `earth-postcard-${state.result.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`; link.href = canvas.toDataURL("image/png"); link.click(); }; image.src = state.result.src; }
 
-function setBusy(value, message = "") {
-  state.busy = value;
-  createButton.disabled = !state.source || Boolean(value);
-  if (value === "create") createButton.innerHTML = '<span class="spinner light"></span> Making your postcard…';
-  else { createButton.innerHTML = 'Make my postcard <span>↗</span>'; }
-  if (value === "search") inlineStatus.innerHTML = '<span class="spinner"></span> Searching places…';
-  else if (value === "imagery") inlineStatus.innerHTML = '<span class="spinner"></span> Finding a fresh satellite view…';
-  inlineStatus.hidden = !["search", "imagery"].includes(value);
-  if (message) inlineStatus.innerHTML = `<span class="spinner"></span> ${message}`;
-}
-
-async function searchPlaces(query = searchInput.value) {
-  const term = query.trim();
-  if (term.length < 2) return setError("Type a place name to begin.");
-  setBusy("search"); setError(""); resultsBox.hidden = true;
-  state.place = null; state.source = ""; state.result = null; selectedPlace.hidden = true;
-  createButton.disabled = true;
-  try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Search failed.");
-    state.results = data;
-    if (!data.length) { setError("No places found. Try a city, region or landmark."); return; }
-    resultsBox.replaceChildren();
-    for (const place of data) {
-      const button = document.createElement("button"); button.type = "button"; button.setAttribute("role", "option");
-      const label = document.createElement("span"); label.textContent = place.display_name;
-      const arrow = document.createElement("b"); arrow.textContent = "↗";
-      button.append(label, arrow); button.addEventListener("click", () => choosePlace(place)); resultsBox.append(button);
-    }
-    resultsBox.hidden = false;
-  } catch (error) { setError(error.message); }
-  finally { setBusy(""); }
-}
-
-async function choosePlace(place) {
-  state.place = place; state.result = null; state.source = ""; resultsBox.hidden = true;
-  setBusy("imagery"); setError("");
-  try {
-    const response = await fetch(`/api/satellite?lat=${encodeURIComponent(place.lat)}&lon=${encodeURIComponent(place.lon)}&v=landsat-2000`);
-    if (!response.ok) { const data = await response.json(); throw new Error(data.error || "Imagery unavailable."); }
-    state.date = response.headers.get("X-Imagery-Date") || "recent observation";
-    state.source = URL.createObjectURL(await response.blob());
-    const name = place.display_name.split(",").slice(0, 2).join(",");
-    $("#selected-name").textContent = name;
-    $("#selected-meta").textContent = "NASA Landsat · 2000 annual composite";
-    selectedPlace.hidden = false;
-    $("#preview-title").textContent = "A place on Earth";
-    $("#preview-counter").textContent = "✳";
-    frame.classList.remove("has-result"); frame.innerHTML = "";
-    const preview = document.createElement("div"); preview.className = "satellite-preview";
-    const image = document.createElement("img"); image.src = state.source; image.alt = `Real NASA satellite image of ${name}`;
-    const badge = document.createElement("div"); badge.className = "satellite-badge"; badge.innerHTML = '<span>●</span> LANDSAT VIEW · 2000 COMPOSITE';
-    const coord = document.createElement("div"); coord.className = "coord-tag";
-    const lat = Number(place.lat); const lon = Number(place.lon);
-    coord.textContent = `${Math.abs(lat).toFixed(3)}° ${lat >= 0 ? "N" : "S"} / ${Math.abs(lon).toFixed(3)}° ${lon >= 0 ? "E" : "W"}`;
-    preview.append(image, badge, coord); frame.append(preview);
-  } catch (error) { setError(error.message); }
-  finally { setBusy(""); createButton.disabled = !state.source; }
-}
-
-async function makePostcard() {
-  if (!state.source || !state.place) return;
-  setBusy("create"); setError(""); $("#result-actions").hidden = true;
-  try {
-    const blob = await (await fetch(state.source)).blob();
-    const image = await new Promise((resolve, reject) => {
-      const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);
-    });
-    const response = await fetch("/api/postcard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, place: state.place.display_name.split(",").slice(0, 2).join(","), style: state.style, coordinates: `${Number(state.place.lat).toFixed(3)}, ${Number(state.place.lon).toFixed(3)}` }) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Generation failed.");
-    state.result = { ...data, src: `data:image/png;base64,${data.image}` };
-    showPostcard();
-  } catch (error) { setError(error.message); }
-  finally { setBusy(""); }
-}
-
-function showPostcard() {
-  const name = state.place.display_name.split(",").slice(0, 2).join(",");
-  frame.innerHTML = ""; frame.classList.add("has-result");
-  const image = document.createElement("img"); image.className = "art-image"; image.src = state.result.src; image.alt = `AI-styled postcard of ${name}`;
-  const caption = document.createElement("div"); caption.className = "caption-strip";
-  const line = document.createElement("p"); line.textContent = `“${state.result.caption}”`;
-  const credit = document.createElement("small"); credit.textContent = "EARTH POSTCARDS · NASA GIBS · LANDSAT 2000";
-  caption.append(line, credit); frame.append(image, caption);
-  $("#preview-title").textContent = "A view to remember";
-  $("#preview-counter").textContent = "01 / 01";
-  $("#source-note").textContent = `Styled from NASA Landsat 2000 imagery · ${state.style}`;
-  $("#preview-foot").hidden = true; $("#result-actions").hidden = false;
-}
-
-async function downloadPostcard() {
-  if (!state.result) return;
-  const image = new Image(); image.src = state.result.src;
-  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
-  const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight + 220;
-  const ctx = canvas.getContext("2d"); ctx.fillStyle = "#f5f0e5"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(image, 0, 0, canvas.width, image.naturalHeight);
-  ctx.fillStyle = "#f5f0e5"; ctx.fillRect(0, image.naturalHeight, canvas.width, 220);
-  ctx.fillStyle = "#283e34"; ctx.textAlign = "center"; ctx.font = "italic 34px Georgia";
-  const words = state.result.caption.split(" "); const lines = [""];
-  for (const word of words) { const next = `${lines[lines.length - 1]} ${word}`.trim(); if (ctx.measureText(next).width > canvas.width - 96) lines.push(word); else lines[lines.length - 1] = next; }
-  lines.slice(0, 2).forEach((line, index) => ctx.fillText(line, canvas.width / 2, image.naturalHeight + 83 + index * 44));
-  ctx.fillStyle = "#6f786b"; ctx.font = "14px Arial"; ctx.letterSpacing = "2px"; ctx.fillText("EARTH POSTCARDS  •  NASA GIBS  •  LANDSAT 2000", canvas.width / 2, canvas.height - 27);
-  const slug = state.place.display_name.split(",")[0].toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const link = document.createElement("a"); link.download = `earth-postcard-${slug}.png`; link.href = canvas.toDataURL("image/png"); link.click();
-}
-
-searchForm.addEventListener("submit", (event) => { event.preventDefault(); searchPlaces(); });
-document.querySelectorAll("[data-place]").forEach((button) => button.addEventListener("click", () => { searchInput.value = button.dataset.place; searchPlaces(button.dataset.place); }));
-document.querySelectorAll("[data-style]").forEach((button) => button.addEventListener("click", () => {
-  state.style = button.dataset.style;
-  document.querySelectorAll("[data-style]").forEach((item) => { const active = item === button; item.classList.toggle("active", active); item.querySelector(".radio").textContent = active ? "●" : "○"; });
-}));
-createButton.addEventListener("click", makePostcard);
-$("#download-button").addEventListener("click", downloadPostcard);
+searchForm.addEventListener("submit", (event) => { event.preventDefault(); goSomewhere(); }); $("#surprise-button").addEventListener("click", () => { searchInput.value = samplePrompts[Math.floor(Math.random() * samplePrompts.length)]; goSomewhere(); }); $("#capture-button").addEventListener("click", capture); $("#compare-range").addEventListener("input", updateCompare); $("#download-button").addEventListener("click", downloadPostcard); $("#capture-again").addEventListener("click", () => { $("#card-view").hidden = true; $("#place-view").hidden = false; }); $("#close-detail").addEventListener("click", () => { detailPanel.hidden = true; globe.ringsData([]); globe.controls().autoRotate = !reducedMotion; }); $("#turn-over").addEventListener("click", () => { state.flipped = !state.flipped; $("#tilt-card").classList.toggle("flipped", state.flipped); }); document.querySelectorAll("[data-style]").forEach((button) => button.addEventListener("click", () => { state.style = button.dataset.style; document.querySelectorAll("[data-style]").forEach((chip) => chip.classList.toggle("active", chip === button)); })); $("#tilt-card").addEventListener("pointermove", (event) => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width - .5; const y = (event.clientY - rect.top) / rect.height - .5; event.currentTarget.style.setProperty("--tilt-x", `${x * 10}deg`); event.currentTarget.style.setProperty("--tilt-y", `${y * -10}deg`); event.currentTarget.style.setProperty("--foil-x", `${(x + .5) * 100}%`); event.currentTarget.style.setProperty("--foil-y", `${(y + .5) * 100}%`); }); $("#tilt-card").addEventListener("pointerleave", (event) => { event.currentTarget.style.setProperty("--tilt-x", "0deg"); event.currentTarget.style.setProperty("--tilt-y", "0deg"); });
+renderCollection();
