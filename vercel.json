@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "api/postcard.js": { "maxDuration": 60 },
+    "api/where.js": { "maxDuration": 60 }
+  }
+}
