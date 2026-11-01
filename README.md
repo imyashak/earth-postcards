@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:8787>. A small Node.js server serves the static web app and handles the API routes using built-in Node features. The OpenAI key is read only by the server and never sent to the browser. To produce a postcard, select a place, wait for the satellite preview, choose a style, then click **Capture**. Download the finished PNG from the revealed card. Restart `npm run dev` after changing `.env` so the server loads the key.
+Open <https://earth-postcards.vercel.app>. A small Node.js server serves the static web app and handles the API routes using built-in Node features. The OpenAI key is read only by the server and never sent to the browser. To produce a postcard, select a place, wait for the satellite preview, choose a style, then click **Capture**. Download the finished PNG from the revealed card. Restart `npm run dev` after changing `.env` so the server loads the key.
 
 ## What it uses
 
